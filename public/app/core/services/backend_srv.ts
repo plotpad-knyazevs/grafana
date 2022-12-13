@@ -93,6 +93,13 @@ export class BackendSrv implements BackendService {
     const id = uuidv4();
     const fetchQueue = this.fetchQueue;
 
+    const urlSearchParams = new URLSearchParams(window.location.search);
+    const queryApiKey = urlSearchParams.get("api_key");
+
+    if (queryApiKey) {
+      options.params = { ...options.params, api_key: queryApiKey };
+    }
+
     return new Observable((observer) => {
       // Subscription is an object that is returned whenever you subscribe to an Observable.
       // You can also use it as a container of many subscriptions and when it is unsubscribed all subscriptions within are also unsubscribed.
@@ -414,6 +421,12 @@ export class BackendSrv implements BackendService {
     requestId?: BackendSrvRequest['requestId'],
     options?: Partial<BackendSrvRequest>
   ) {
+    const urlSearchParams = new URLSearchParams(window.location.search);
+    const queryApiKey = urlSearchParams.get("api_key");
+    console.log(`queryApiKey[get]: ${queryApiKey}`)
+    if (queryApiKey) {
+      params = { ...params, api_key: queryApiKey };
+    }
     return this.request<T>({ ...options, method: 'GET', url, params, requestId });
   }
 
@@ -422,7 +435,14 @@ export class BackendSrv implements BackendService {
   }
 
   async post<T = any>(url: string, data?: any, options?: Partial<BackendSrvRequest>) {
-    return this.request<T>({ ...options, method: 'POST', url, data });
+    const urlSearchParams = new URLSearchParams(window.location.search);
+    const queryApiKey = urlSearchParams.get("api_key");
+    console.log(`queryApiKey[post]: ${queryApiKey}`)
+    let params = {};
+    if (queryApiKey) {
+      params = { ...params, api_key: queryApiKey };
+    }
+    return this.request<T>({ ...options, method: 'POST', url, params, data });
   }
 
   async patch<T = any>(url: string, data: any, options?: Partial<BackendSrvRequest>) {
