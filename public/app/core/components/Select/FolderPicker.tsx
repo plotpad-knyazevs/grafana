@@ -5,13 +5,13 @@ import { useAsync } from 'react-use';
 
 import { AppEvents, SelectableValue, GrafanaTheme2 } from '@grafana/data';
 import { selectors } from '@grafana/e2e-selectors';
-import { useStyles2, ActionMeta, AsyncSelect, Input, InputActionMeta } from '@grafana/ui';
+import { useStyles2, ActionMeta, Input, InputActionMeta, AsyncVirtualizedSelect } from '@grafana/ui';
 import appEvents from 'app/core/app_events';
 import { t } from 'app/core/internationalization';
 import { contextSrv } from 'app/core/services/context_srv';
 import { createFolder, getFolderByUid, searchFolders } from 'app/features/manage-dashboards/state/actions';
 import { DashboardSearchHit } from 'app/features/search/types';
-import { AccessControlAction, PermissionLevelString } from 'app/types';
+import { AccessControlAction, PermissionLevelString, SearchQueryType } from 'app/types';
 
 export type FolderPickerFilter = (hits: DashboardSearchHit[]) => DashboardSearchHit[];
 
@@ -40,7 +40,7 @@ export interface Props {
   allowEmpty?: boolean;
   showRoot?: boolean;
   onClear?: () => void;
-  accessControlMetadata?: boolean;
+  searchQueryType?: SearchQueryType;
   customAdd?: CustomAdd;
   folderWarning?: FolderWarning;
 
@@ -73,7 +73,7 @@ export function FolderPicker(props: Props) {
     rootName = 'General',
     showRoot = true,
     skipInitialLoad,
-    accessControlMetadata,
+    searchQueryType,
     customAdd,
     folderWarning,
   } = props;
@@ -89,8 +89,9 @@ export function FolderPicker(props: Props) {
 
   const getOptions = useCallback(
     async (query: string) => {
-      const searchHits = await searchFolders(query, permissionLevel, accessControlMetadata);
-      const options: Array<SelectableValue<string>> = mapSearchHitsToOptions(searchHits, filter);
+      const searchHits = await searchFolders(query, permissionLevel, searchQueryType);
+      const resultsAfterMapAndFilter = mapSearchHitsToOptions(searchHits, filter);
+      const options: Array<SelectableValue<string>> = resultsAfterMapAndFilter;
 
       const hasAccess =
         contextSrv.hasAccess(AccessControlAction.DashboardsWrite, contextSrv.isEditor) ||
@@ -121,7 +122,7 @@ export function FolderPicker(props: Props) {
       permissionLevel,
       rootName,
       showRoot,
-      accessControlMetadata,
+      searchQueryType,
       filter,
       enableCreateNew,
       customAdd,
@@ -322,7 +323,7 @@ export function FolderPicker(props: Props) {
     return (
       <div data-testid={selectors.components.FolderPicker.containerV2}>
         <FolderWarningWhenSearching />
-        <AsyncSelect
+        <AsyncVirtualizedSelect
           inputId={inputId}
           aria-label={selectors.components.FolderPicker.input}
           loadingMessage={t('folder-picker.loading', 'Loading folders...')}

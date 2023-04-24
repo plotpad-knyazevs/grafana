@@ -10,13 +10,14 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/stretchr/testify/require"
+
 	"github.com/grafana/grafana/pkg/api/dtos"
 	"github.com/grafana/grafana/pkg/components/simplejson"
 	"github.com/grafana/grafana/pkg/services/datasources"
 	"github.com/grafana/grafana/pkg/services/org"
 	"github.com/grafana/grafana/pkg/services/user"
 	"github.com/grafana/grafana/pkg/tests/testinfra"
-	"github.com/stretchr/testify/require"
 )
 
 func TestIntegrationPrometheus(t *testing.T) {
@@ -30,7 +31,7 @@ func TestIntegrationPrometheus(t *testing.T) {
 	grafanaListeningAddr, testEnv := testinfra.StartGrafanaEnv(t, dir, path)
 	ctx := context.Background()
 
-	testinfra.CreateUser(t, testEnv.SQLStore, user.CreateUserCommand{
+	u := testinfra.CreateUser(t, testEnv.SQLStore, user.CreateUserCommand{
 		DefaultOrgRole: string(org.RoleAdmin),
 		Password:       "admin",
 		Login:          "admin",
@@ -54,13 +55,13 @@ func TestIntegrationPrometheus(t *testing.T) {
 	}
 
 	uid := "prometheus"
-	err := testEnv.Server.HTTPServer.DataSourcesService.AddDataSource(ctx, &datasources.AddDataSourceCommand{
-		OrgId:          1,
+	_, err := testEnv.Server.HTTPServer.DataSourcesService.AddDataSource(ctx, &datasources.AddDataSourceCommand{
+		OrgID:          u.OrgID,
 		Access:         datasources.DS_ACCESS_PROXY,
 		Name:           "Prometheus",
 		Type:           datasources.DS_PROMETHEUS,
-		Uid:            uid,
-		Url:            outgoingServer.URL,
+		UID:            uid,
+		URL:            outgoingServer.URL,
 		BasicAuth:      true,
 		BasicAuthUser:  "basicAuthUser",
 		JsonData:       jsonData,
@@ -87,7 +88,7 @@ func TestIntegrationPrometheus(t *testing.T) {
 		// nolint:gosec
 		resp, err := http.Post(u, "application/json", buf1)
 		require.NoError(t, err)
-		require.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
 		t.Cleanup(func() {
 			err := resp.Body.Close()
 			require.NoError(t, err)
@@ -96,8 +97,7 @@ func TestIntegrationPrometheus(t *testing.T) {
 		require.NoError(t, err)
 
 		require.NotNil(t, outgoingRequest)
-		require.Equal(t, "/api/v1/query_range?end=1668081660&q1=1&q2=2&query=up&start=1668078060&step=30",
-			outgoingRequest.URL.String())
+		require.Equal(t, "/api/v1/query_range?q1=1&q2=2", outgoingRequest.URL.String())
 		require.Equal(t, "custom-header-value", outgoingRequest.Header.Get("X-CUSTOM-HEADER"))
 		username, pwd, ok := outgoingRequest.BasicAuth()
 		require.True(t, ok)
@@ -124,7 +124,7 @@ func TestIntegrationPrometheus(t *testing.T) {
 		// nolint:gosec
 		resp, err := http.Post(u, "application/json", buf1)
 		require.NoError(t, err)
-		require.Equal(t, http.StatusInternalServerError, resp.StatusCode)
+		require.Equal(t, http.StatusOK, resp.StatusCode)
 		t.Cleanup(func() {
 			err := resp.Body.Close()
 			require.NoError(t, err)
@@ -134,7 +134,7 @@ func TestIntegrationPrometheus(t *testing.T) {
 
 		require.NotNil(t, outgoingRequest)
 		require.Equal(t, "/api/v1/query_range", outgoingRequest.URL.Path)
-		require.Contains(t, outgoingRequest.URL.String(), "&q1=1&q2=2")
+		require.Contains(t, outgoingRequest.URL.String(), "?q1=1&q2=2")
 		require.Equal(t, "custom-header-value", outgoingRequest.Header.Get("X-CUSTOM-HEADER"))
 		username, pwd, ok := outgoingRequest.BasicAuth()
 		require.True(t, ok)

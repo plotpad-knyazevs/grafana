@@ -35,14 +35,22 @@ func (s *Service) QueryData(ctx context.Context, req *backend.QueryDataRequest) 
 		return nil, fmt.Errorf("req cannot be nil")
 	}
 
-	plugin, exists := s.plugin(ctx, req.PluginContext.PluginID)
+	p, exists := s.plugin(ctx, req.PluginContext.PluginID)
 	if !exists {
 		return nil, plugins.ErrPluginNotRegistered.Errorf("%w", backendplugin.ErrPluginNotRegistered)
 	}
 
+	var totalBytes float64
+	for _, v := range req.Queries {
+		totalBytes += float64(len(v.JSON))
+	}
+
 	var resp *backend.QueryDataResponse
-	err := instrumentation.InstrumentQueryDataRequest(ctx, &req.PluginContext, s.cfg, func() (innerErr error) {
-		resp, innerErr = plugin.QueryData(ctx, req)
+	err := instrumentation.InstrumentQueryDataRequest(ctx, &req.PluginContext, instrumentation.Cfg{
+		LogDatasourceRequests: s.cfg.LogDatasourceRequests,
+		Target:                p.Target(),
+	}, totalBytes, func() (innerErr error) {
+		resp, innerErr = p.QueryData(ctx, req)
 		return
 	})
 
@@ -83,7 +91,12 @@ func (s *Service) CallResource(ctx context.Context, req *backend.CallResourceReq
 	if !exists {
 		return backendplugin.ErrPluginNotRegistered
 	}
-	err := instrumentation.InstrumentCallResourceRequest(ctx, &req.PluginContext, s.cfg, func() error {
+
+	totalBytes := float64(len(req.Body))
+	err := instrumentation.InstrumentCallResourceRequest(ctx, &req.PluginContext, instrumentation.Cfg{
+		LogDatasourceRequests: s.cfg.LogDatasourceRequests,
+		Target:                p.Target(),
+	}, totalBytes, func() error {
 		removeConnectionHeaders(req.Headers)
 		removeHopByHopHeaders(req.Headers)
 
@@ -120,7 +133,10 @@ func (s *Service) CollectMetrics(ctx context.Context, req *backend.CollectMetric
 	}
 
 	var resp *backend.CollectMetricsResult
-	err := instrumentation.InstrumentCollectMetrics(ctx, &req.PluginContext, s.cfg, func() (innerErr error) {
+	err := instrumentation.InstrumentCollectMetrics(ctx, &req.PluginContext, instrumentation.Cfg{
+		LogDatasourceRequests: s.cfg.LogDatasourceRequests,
+		Target:                p.Target(),
+	}, func() (innerErr error) {
 		resp, innerErr = p.CollectMetrics(ctx, req)
 		return
 	})
@@ -142,7 +158,10 @@ func (s *Service) CheckHealth(ctx context.Context, req *backend.CheckHealthReque
 	}
 
 	var resp *backend.CheckHealthResult
-	err := instrumentation.InstrumentCheckHealthRequest(ctx, &req.PluginContext, s.cfg, func() (innerErr error) {
+	err := instrumentation.InstrumentCheckHealthRequest(ctx, &req.PluginContext, instrumentation.Cfg{
+		LogDatasourceRequests: s.cfg.LogDatasourceRequests,
+		Target:                p.Target(),
+	}, func() (innerErr error) {
 		resp, innerErr = p.CheckHealth(ctx, req)
 		return
 	})
@@ -255,6 +274,7 @@ var hopHeaders = []string{
 	"Trailer", // not Trailers per URL above; https://www.rfc-editor.org/errata_search.php?eid=4522
 	"Transfer-Encoding",
 	"Upgrade",
+	"User-Agent",
 }
 
 // removeHopByHopHeaders removes hop-by-hop headers. Especially

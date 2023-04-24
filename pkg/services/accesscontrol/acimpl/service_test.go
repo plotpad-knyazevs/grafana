@@ -11,13 +11,13 @@ import (
 	"github.com/grafana/grafana/pkg/infra/db"
 	"github.com/grafana/grafana/pkg/infra/localcache"
 	"github.com/grafana/grafana/pkg/infra/log"
-	"github.com/grafana/grafana/pkg/models"
 	"github.com/grafana/grafana/pkg/models/roletype"
 	"github.com/grafana/grafana/pkg/plugins"
 	"github.com/grafana/grafana/pkg/services/accesscontrol"
 	"github.com/grafana/grafana/pkg/services/accesscontrol/actest"
 	"github.com/grafana/grafana/pkg/services/accesscontrol/database"
 	"github.com/grafana/grafana/pkg/services/featuremgmt"
+	"github.com/grafana/grafana/pkg/services/licensing"
 	"github.com/grafana/grafana/pkg/services/user"
 	"github.com/grafana/grafana/pkg/setting"
 )
@@ -161,6 +161,77 @@ func TestService_DeclareFixedRoles(t *testing.T) {
 	}
 }
 
+func TestService_DeclareFixedRoles_Overrides(t *testing.T) {
+	tests := []struct {
+		name         string
+		registration accesscontrol.RoleRegistration
+		overrides    map[string][]string
+		wantGrants   []string
+		wantErr      bool
+	}{
+		{
+			name: "no grant override",
+			registration: accesscontrol.RoleRegistration{
+				Role:                accesscontrol.RoleDTO{Name: "fixed:test:test"},
+				Grants:              []string{"Admin"},
+				AllowGrantsOverride: true,
+			},
+			wantGrants: []string{"Admin"},
+			wantErr:    false,
+		},
+		{
+			name: "should account for grant overrides",
+			registration: accesscontrol.RoleRegistration{
+				Role:                accesscontrol.RoleDTO{Name: "fixed:test:test"},
+				Grants:              []string{"Admin"},
+				AllowGrantsOverride: true,
+			},
+			overrides:  map[string][]string{"fixed_test_test": {"Viewer", "Grafana Admin"}},
+			wantGrants: []string{"Viewer", "Grafana Admin"},
+			wantErr:    false,
+		},
+		{
+			name: "should not account for grant overrides",
+			registration: accesscontrol.RoleRegistration{
+				Role:                accesscontrol.RoleDTO{Name: "fixed:test:test"},
+				Grants:              []string{"Admin"},
+				AllowGrantsOverride: false,
+			},
+			overrides:  map[string][]string{"fixed_test_test": {"Viewer", "Grafana Admin"}},
+			wantGrants: []string{"Admin"},
+			wantErr:    false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ac := setupTestEnv(t)
+
+			// Reset the registations
+			ac.registrations = accesscontrol.RegistrationList{}
+			ac.cfg.RBACGrantOverrides = tt.overrides
+
+			// Test
+			err := ac.DeclareFixedRoles(tt.registration)
+			if tt.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+
+			registrationCnt := 0
+			grants := []string{}
+			ac.registrations.Range(func(registration accesscontrol.RoleRegistration) bool {
+				registrationCnt++
+				grants = registration.Grants
+				return true
+			})
+			require.Equal(t, 1, registrationCnt,
+				"expected service registration list to contain the registration")
+			require.ElementsMatch(t, tt.wantGrants, grants)
+		})
+	}
+}
+
 func TestService_DeclarePluginRoles(t *testing.T) {
 	tests := []struct {
 		name          string
@@ -278,7 +349,7 @@ func TestService_DeclarePluginRoles(t *testing.T) {
 func TestService_RegisterFixedRoles(t *testing.T) {
 	tests := []struct {
 		name          string
-		token         models.Licensing
+		token         licensing.Licensing
 		registrations []accesscontrol.RoleRegistration
 		wantErr       bool
 	}{
@@ -519,6 +590,159 @@ func TestService_SearchUsersPermissions(t *testing.T) {
 
 				require.ElementsMatch(t, gotPerm, wantPerm)
 			}
+		})
+	}
+}
+
+func TestService_SearchUserPermissions(t *testing.T) {
+	ctx := context.Background()
+	tests := []struct {
+		name         string
+		searchOption accesscontrol.SearchOptions
+		ramRoles     map[string]*accesscontrol.RoleDTO    // BasicRole => RBAC BasicRole
+		storedPerms  map[int64][]accesscontrol.Permission // UserID => Permissions
+		storedRoles  map[int64][]string                   // UserID => Roles
+		want         []accesscontrol.Permission
+		wantErr      bool
+	}{
+		{
+			name: "ram only",
+			searchOption: accesscontrol.SearchOptions{
+				ActionPrefix: "teams",
+				UserID:       2,
+			},
+			ramRoles: map[string]*accesscontrol.RoleDTO{
+				string(roletype.RoleEditor): {Permissions: []accesscontrol.Permission{
+					{Action: accesscontrol.ActionTeamsCreate},
+				}},
+				string(roletype.RoleAdmin): {Permissions: []accesscontrol.Permission{
+					{Action: accesscontrol.ActionTeamsRead, Scope: "teams:*"},
+				}},
+				accesscontrol.RoleGrafanaAdmin: {Permissions: []accesscontrol.Permission{
+					{Action: accesscontrol.ActionTeamsPermissionsRead, Scope: "teams:*"},
+				}},
+			},
+			storedRoles: map[int64][]string{
+				1: {string(roletype.RoleEditor)},
+				2: {string(roletype.RoleAdmin), accesscontrol.RoleGrafanaAdmin},
+			},
+			want: []accesscontrol.Permission{
+				{Action: accesscontrol.ActionTeamsRead, Scope: "teams:*"},
+				{Action: accesscontrol.ActionTeamsPermissionsRead, Scope: "teams:*"}},
+		},
+		{
+			name: "stored only",
+			searchOption: accesscontrol.SearchOptions{
+				ActionPrefix: "teams",
+				UserID:       2,
+			},
+			storedPerms: map[int64][]accesscontrol.Permission{
+				1: {{Action: accesscontrol.ActionTeamsRead, Scope: "teams:id:1"}},
+				2: {{Action: accesscontrol.ActionTeamsRead, Scope: "teams:*"},
+					{Action: accesscontrol.ActionTeamsPermissionsRead, Scope: "teams:*"}},
+			},
+			storedRoles: map[int64][]string{
+				1: {string(roletype.RoleEditor)},
+				2: {string(roletype.RoleAdmin), accesscontrol.RoleGrafanaAdmin},
+			},
+			want: []accesscontrol.Permission{
+				{Action: accesscontrol.ActionTeamsRead, Scope: "teams:*"},
+				{Action: accesscontrol.ActionTeamsPermissionsRead, Scope: "teams:*"},
+			},
+		},
+		{
+			name: "ram and stored",
+			searchOption: accesscontrol.SearchOptions{
+				ActionPrefix: "teams",
+				UserID:       2,
+			},
+			ramRoles: map[string]*accesscontrol.RoleDTO{
+				string(roletype.RoleAdmin): {Permissions: []accesscontrol.Permission{
+					{Action: accesscontrol.ActionTeamsRead, Scope: "teams:*"},
+				}},
+				accesscontrol.RoleGrafanaAdmin: {Permissions: []accesscontrol.Permission{
+					{Action: accesscontrol.ActionTeamsPermissionsRead, Scope: "teams:*"},
+				}},
+			},
+			storedPerms: map[int64][]accesscontrol.Permission{
+				1: {{Action: accesscontrol.ActionTeamsRead, Scope: "teams:id:1"}},
+				2: {{Action: accesscontrol.ActionTeamsRead, Scope: "teams:id:1"},
+					{Action: accesscontrol.ActionTeamsPermissionsRead, Scope: "teams:id:1"}},
+			},
+			storedRoles: map[int64][]string{
+				1: {string(roletype.RoleEditor)},
+				2: {string(roletype.RoleAdmin), accesscontrol.RoleGrafanaAdmin},
+			},
+			want: []accesscontrol.Permission{
+				{Action: accesscontrol.ActionTeamsRead, Scope: "teams:id:1"},
+				{Action: accesscontrol.ActionTeamsPermissionsRead, Scope: "teams:id:1"},
+				{Action: accesscontrol.ActionTeamsRead, Scope: "teams:*"},
+				{Action: accesscontrol.ActionTeamsPermissionsRead, Scope: "teams:*"},
+			},
+		},
+		{
+			name: "check action prefix filter works correctly",
+			searchOption: accesscontrol.SearchOptions{
+				ActionPrefix: "teams",
+				UserID:       1,
+			},
+			ramRoles: map[string]*accesscontrol.RoleDTO{
+				string(roletype.RoleEditor): {Permissions: []accesscontrol.Permission{
+					{Action: accesscontrol.ActionTeamsRead, Scope: "teams:*"},
+					{Action: accesscontrol.ActionUsersCreate},
+					{Action: accesscontrol.ActionTeamsPermissionsRead, Scope: "teams:*"},
+					{Action: accesscontrol.ActionAnnotationsRead, Scope: "annotations:*"},
+				}},
+			},
+			storedRoles: map[int64][]string{
+				1: {string(roletype.RoleEditor)},
+			},
+			want: []accesscontrol.Permission{
+				{Action: accesscontrol.ActionTeamsRead, Scope: "teams:*"},
+				{Action: accesscontrol.ActionTeamsPermissionsRead, Scope: "teams:*"},
+			},
+		},
+		{
+			name: "check action filter works correctly",
+			searchOption: accesscontrol.SearchOptions{
+				Action: accesscontrol.ActionTeamsRead,
+				UserID: 1,
+			},
+			ramRoles: map[string]*accesscontrol.RoleDTO{
+				string(roletype.RoleEditor): {Permissions: []accesscontrol.Permission{
+					{Action: accesscontrol.ActionTeamsRead, Scope: "teams:*"},
+					{Action: accesscontrol.ActionUsersCreate},
+					{Action: accesscontrol.ActionTeamsRead, Scope: "teams:id:1"},
+					{Action: accesscontrol.ActionAnnotationsRead, Scope: "annotations:*"},
+				}},
+			},
+			storedRoles: map[int64][]string{
+				1: {string(roletype.RoleEditor)},
+			},
+			want: []accesscontrol.Permission{
+				{Action: accesscontrol.ActionTeamsRead, Scope: "teams:id:1"},
+				{Action: accesscontrol.ActionTeamsRead, Scope: "teams:*"},
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ac := setupTestEnv(t)
+
+			ac.roles = tt.ramRoles
+			ac.store = actest.FakeStore{
+				ExpectedUsersPermissions: tt.storedPerms,
+				ExpectedUsersRoles:       tt.storedRoles,
+			}
+
+			got, err := ac.searchUserPermissions(ctx, 1, tt.searchOption)
+			if tt.wantErr {
+				require.NotNil(t, err)
+				return
+			}
+			require.Nil(t, err)
+
+			assert.ElementsMatch(t, got, tt.want)
 		})
 	}
 }

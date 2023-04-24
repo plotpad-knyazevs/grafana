@@ -1,8 +1,8 @@
 import React from 'react';
 
 import { selectors as e2eSelectors } from '@grafana/e2e-selectors';
+import { TestingStatus } from '@grafana/runtime';
 import { Alert } from '@grafana/ui';
-import { TestingStatus } from 'app/types';
 
 export type Props = {
   testingStatus?: TestingStatus;
@@ -26,7 +26,7 @@ export function DataSourceTestingStatus({ testingStatus }: Props) {
             <>
               {detailsMessage}
               {detailsVerboseMessage ? (
-                <details style={{ whiteSpace: 'pre-wrap' }}>{detailsVerboseMessage}</details>
+                <details style={{ whiteSpace: 'pre-wrap' }}>{String(detailsVerboseMessage)}</details>
               ) : null}
             </>
           )}

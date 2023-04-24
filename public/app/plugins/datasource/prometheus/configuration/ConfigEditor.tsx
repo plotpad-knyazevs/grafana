@@ -41,6 +41,7 @@ export const ConfigEditor = (props: Props) => {
         sigV4AuthToggleEnabled={config.sigV4AuthEnabled}
         azureAuthSettings={azureAuthSettings}
         renderSigV4Editor={<SIGV4ConnectionConfig {...props}></SIGV4ConnectionConfig>}
+        secureSocksDSProxyEnabled={config.secureSocksDSProxyEnabled}
       />
 
       <AlertingSettings<PromOptions> options={options} onOptionsChange={onOptionsChange} />

@@ -3,7 +3,7 @@ import memoizeOne from 'memoize-one';
 import React from 'react';
 import { connect, ConnectedProps } from 'react-redux';
 
-import { ExploreUrlState, EventBusExtended, EventBusSrv, GrafanaTheme2, EventBus } from '@grafana/data';
+import { EventBusExtended, EventBusSrv, GrafanaTheme2, EventBus } from '@grafana/data';
 import { selectors } from '@grafana/e2e-selectors';
 import { reportInteraction } from '@grafana/runtime';
 import { Themeable2, withTheme2 } from '@grafana/ui';
@@ -110,9 +110,9 @@ class ExplorePaneContainerUnconnected extends React.PureComponent<Props> {
               rootDatasourceOverride = changeDatasourceUid;
               const datasource = await getDatasourceSrv().get(changeDatasourceUid);
               const datasourceInit = await getDatasourceSrv().get(initialDatasource);
-              await this.props.importQueries(exploreId, queries, datasourceInit, datasource);
+              const newQueries = await this.props.importQueries(exploreId, queries, datasourceInit, datasource);
               await this.props.stateSave({ replace: true });
-              queries = this.props.initialQueries;
+              queries = newQueries ?? this.props.initialQueries;
             }
           }
         }
@@ -174,7 +174,7 @@ function mapStateToProps(state: StoreState, props: OwnProps) {
   const timeZone = getTimeZone(state.user);
   const fiscalYearStartMonth = getFiscalYearStartMonth(state.user);
 
-  const { datasource, queries, range: urlRange, panelsState } = (urlState || {}) as ExploreUrlState;
+  const { datasource, queries, range: urlRange, panelsState } = urlState || {};
   const initialDatasource = datasource || store.get(lastUsedDatasourceKeyForOrgId(state.user.orgId));
   const initialRange = urlRange
     ? getTimeRangeFromUrlMemoized(urlRange, timeZone, fiscalYearStartMonth)

@@ -1,24 +1,24 @@
 import React, { useMemo } from 'react';
 
-import { Field, PanelProps } from '@grafana/data';
+import { DataFrame, Field, PanelProps } from '@grafana/data';
 import { PanelDataErrorView } from '@grafana/runtime';
 import { TooltipDisplayMode } from '@grafana/schema';
 import { KeyboardPlugin, TimeSeries, TooltipPlugin, usePanelContext, ZoomPlugin } from '@grafana/ui';
 import { config } from 'app/core/config';
 import { getFieldLinksForExplore } from 'app/features/explore/utils/links';
 
+import { PanelOptions } from './panelcfg.gen';
 import { AnnotationEditorPlugin } from './plugins/AnnotationEditorPlugin';
 import { AnnotationsPlugin } from './plugins/AnnotationsPlugin';
 import { ContextMenuPlugin } from './plugins/ContextMenuPlugin';
 import { ExemplarsPlugin, getVisibleLabels } from './plugins/ExemplarsPlugin';
 import { OutsideRangePlugin } from './plugins/OutsideRangePlugin';
 import { ThresholdControlsPlugin } from './plugins/ThresholdControlsPlugin';
-import { TimeSeriesOptions } from './types';
 import { getTimezones, prepareGraphableFields, regenerateLinksSupplier } from './utils';
 
-interface TimeSeriesPanelProps extends PanelProps<TimeSeriesOptions> {}
+interface TimeSeriesPanelProps extends PanelProps<PanelOptions> {}
 
-export const TimeSeriesPanel: React.FC<TimeSeriesPanelProps> = ({
+export const TimeSeriesPanel = ({
   data,
   timeRange,
   timeZone,
@@ -29,12 +29,32 @@ export const TimeSeriesPanel: React.FC<TimeSeriesPanelProps> = ({
   onChangeTimeRange,
   replaceVariables,
   id,
-}) => {
-  const { sync, canAddAnnotations, onThresholdsChange, canEditThresholds, onSplitOpen } = usePanelContext();
+}: TimeSeriesPanelProps) => {
+  const { sync, canAddAnnotations, onThresholdsChange, canEditThresholds, showThresholds, onSplitOpen } =
+    usePanelContext();
 
   const getFieldLinks = (field: Field, rowIndex: number) => {
     return getFieldLinksForExplore({ field, rowIndex, splitOpenFn: onSplitOpen, range: timeRange });
   };
+
+  const { annotations, exemplars } = useMemo(() => {
+    let annotations: DataFrame[] | null = null;
+    let exemplars: DataFrame[] | null = null;
+
+    if (data?.annotations?.length) {
+      annotations = [];
+      exemplars = [];
+      for (let frame of data.annotations) {
+        if (frame.name === 'exemplar') {
+          exemplars.push(frame);
+        } else {
+          annotations.push(frame);
+        }
+      }
+    }
+
+    return { annotations, exemplars };
+  }, [data.annotations]);
 
   const frames = useMemo(() => prepareGraphableFields(data.series, config.theme2, timeRange), [data, timeRange]);
   const timezones = useMemo(() => getTimezones(options.timezone, timeZone), [options.timezone, timeZone]);
@@ -87,9 +107,7 @@ export const TimeSeriesPanel: React.FC<TimeSeriesPanelProps> = ({
               />
             )}
             {/* Renders annotation markers*/}
-            {data.annotations && (
-              <AnnotationsPlugin annotations={data.annotations} config={config} timeZone={timeZone} />
-            )}
+            {annotations && <AnnotationsPlugin annotations={annotations} config={config} timeZone={timeZone} />}
             {/* Enables annotations creation*/}
             {enableAnnotationCreation ? (
               <AnnotationEditorPlugin data={alignedDataFrame} timeZone={timeZone} config={config}>
@@ -131,21 +149,21 @@ export const TimeSeriesPanel: React.FC<TimeSeriesPanelProps> = ({
                 defaultItems={[]}
               />
             )}
-            {data.annotations && (
+            {exemplars && (
               <ExemplarsPlugin
                 visibleSeries={getVisibleLabels(config, frames)}
                 config={config}
-                exemplars={data.annotations}
+                exemplars={exemplars}
                 timeZone={timeZone}
                 getFieldLinks={getFieldLinks}
               />
             )}
 
-            {canEditThresholds && onThresholdsChange && (
+            {((canEditThresholds && onThresholdsChange) || showThresholds) && (
               <ThresholdControlsPlugin
                 config={config}
                 fieldConfig={fieldConfig}
-                onThresholdsChange={onThresholdsChange}
+                onThresholdsChange={canEditThresholds ? onThresholdsChange : undefined}
               />
             )}
 

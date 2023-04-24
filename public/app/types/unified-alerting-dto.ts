@@ -23,6 +23,10 @@ type GrafanaAlertStateReason = ` (${string})` | '';
 
 export type GrafanaAlertStateWithReason = `${GrafanaAlertState}${GrafanaAlertStateReason}`;
 
+export function isPromAlertingRuleState(state: string): state is PromAlertingRuleState {
+  return Object.values<string>(PromAlertingRuleState).includes(state);
+}
+
 export function isGrafanaAlertState(state: string): state is GrafanaAlertState {
   return Object.values(GrafanaAlertState).some((promState) => promState === state);
 }
@@ -60,6 +64,7 @@ export enum PromApplication {
   Mimir = 'Mimir',
   Prometheus = 'Prometheus',
   Thanos = 'Thanos',
+  VictoriaMetrics = 'VictoriaMetrics',
 }
 
 export interface PromBuildInfoResponse {
@@ -196,6 +201,7 @@ export interface PostableGrafanaRuleDefinition {
   no_data_state: GrafanaAlertStateDecision;
   exec_err_state: GrafanaAlertStateDecision;
   data: AlertQuery[];
+  is_paused?: boolean;
 }
 export interface GrafanaRuleDefinition extends PostableGrafanaRuleDefinition {
   id?: string;

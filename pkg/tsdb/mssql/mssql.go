@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	mssql "github.com/denisenkom/go-mssqldb"
+	mssql "github.com/grafana/go-mssqldb"
 	"github.com/grafana/grafana-plugin-sdk-go/backend"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/datasource"
 	"github.com/grafana/grafana-plugin-sdk-go/backend/instancemgmt"
@@ -55,11 +55,12 @@ func (s *Service) QueryData(ctx context.Context, req *backend.QueryDataRequest) 
 func newInstanceSettings(cfg *setting.Cfg) datasource.InstanceFactoryFunc {
 	return func(settings backend.DataSourceInstanceSettings) (instancemgmt.Instance, error) {
 		jsonData := sqleng.JsonData{
-			MaxOpenConns:      0,
-			MaxIdleConns:      2,
-			ConnMaxLifetime:   14400,
+			MaxOpenConns:      cfg.SqlDatasourceMaxOpenConnsDefault,
+			MaxIdleConns:      cfg.SqlDatasourceMaxIdleConnsDefault,
+			ConnMaxLifetime:   cfg.SqlDatasourceMaxConnLifetimeDefault,
 			Encrypt:           "false",
 			ConnectionTimeout: 0,
+			SecureDSProxy:     false,
 		}
 
 		err := json.Unmarshal(settings.JSONData, &jsonData)
@@ -90,8 +91,18 @@ func newInstanceSettings(cfg *setting.Cfg) datasource.InstanceFactoryFunc {
 		if cfg.Env == setting.Dev {
 			logger.Debug("GetEngine", "connection", cnnstr)
 		}
+
+		driverName := "mssql"
+		// register a new proxy driver if the secure socks proxy is enabled
+		if cfg.SecureSocksDSProxy.Enabled && jsonData.SecureDSProxy {
+			driverName, err = createMSSQLProxyDriver(&cfg.SecureSocksDSProxy, cnnstr)
+			if err != nil {
+				return nil, err
+			}
+		}
+
 		config := sqleng.DataPluginConfiguration{
-			DriverName:        "mssql",
+			DriverName:        driverName,
 			ConnectionString:  cnnstr,
 			DSInfo:            dsInfo,
 			MetricColumnTypes: []string{"VARCHAR", "CHAR", "NVARCHAR", "NCHAR"},
@@ -197,6 +208,22 @@ func (t *mssqlQueryResultTransformer) TransformQueryError(logger log.Logger, err
 	}
 
 	return err
+}
+
+// CheckHealth pings the connected SQL database
+func (s *Service) CheckHealth(ctx context.Context, req *backend.CheckHealthRequest) (*backend.CheckHealthResult, error) {
+	dsHandler, err := s.getDataSourceHandler(req.PluginContext)
+	if err != nil {
+		return nil, err
+	}
+
+	err = dsHandler.Ping()
+
+	if err != nil {
+		return &backend.CheckHealthResult{Status: backend.HealthStatusError, Message: dsHandler.TransformQueryError(logger, err).Error()}, nil
+	}
+
+	return &backend.CheckHealthResult{Status: backend.HealthStatusOk, Message: "Database Connection OK"}, nil
 }
 
 func (t *mssqlQueryResultTransformer) GetConverterList() []sqlutil.StringConverter {

@@ -15,6 +15,7 @@ import (
 	"github.com/grafana/grafana/pkg/services/dashboardsnapshots"
 	"github.com/grafana/grafana/pkg/services/grpcserver"
 	"github.com/grafana/grafana/pkg/services/guardian"
+	ldapapi "github.com/grafana/grafana/pkg/services/ldap/api"
 	"github.com/grafana/grafana/pkg/services/live"
 	"github.com/grafana/grafana/pkg/services/live/pushhttp"
 	"github.com/grafana/grafana/pkg/services/login/authinfoservice"
@@ -23,6 +24,7 @@ import (
 	"github.com/grafana/grafana/pkg/services/notifications"
 	plugindashboardsservice "github.com/grafana/grafana/pkg/services/plugindashboards/service"
 	"github.com/grafana/grafana/pkg/services/provisioning"
+	publicdashboardsmetric "github.com/grafana/grafana/pkg/services/publicdashboards/metric"
 	"github.com/grafana/grafana/pkg/services/rendering"
 	"github.com/grafana/grafana/pkg/services/searchV2"
 	secretsMigrations "github.com/grafana/grafana/pkg/services/secrets/kvstore/migrations"
@@ -32,7 +34,7 @@ import (
 	"github.com/grafana/grafana/pkg/services/store"
 	"github.com/grafana/grafana/pkg/services/store/entity"
 	"github.com/grafana/grafana/pkg/services/store/sanitizer"
-	"github.com/grafana/grafana/pkg/services/thumbs"
+	"github.com/grafana/grafana/pkg/services/supportbundles/supportbundlesimpl"
 	"github.com/grafana/grafana/pkg/services/updatechecker"
 )
 
@@ -43,16 +45,16 @@ func ProvideBackgroundServiceRegistry(
 	provisioning *provisioning.ProvisioningServiceImpl, alerting *alerting.AlertEngine, usageStats *uss.UsageStats,
 	statsCollector *statscollector.Service, grafanaUpdateChecker *updatechecker.GrafanaService,
 	pluginsUpdateChecker *updatechecker.PluginsService, metrics *metrics.InternalMetricsService,
-	secretsService *secretsManager.SecretsService, remoteCache *remotecache.RemoteCache,
-	thumbnailsService thumbs.Service, StorageService store.StorageService, searchService searchV2.SearchService, entityEventsService store.EntityEventsService,
+	secretsService *secretsManager.SecretsService, remoteCache *remotecache.RemoteCache, StorageService store.StorageService, searchService searchV2.SearchService, entityEventsService store.EntityEventsService,
 	saService *samanager.ServiceAccountsService, authInfoService *authinfoservice.Implementation,
-	grpcServerProvider grpcserver.Provider,
-	secretMigrationProvider secretsMigrations.SecretMigrationProvider, loginAttemptService *loginattemptimpl.Service,
+	grpcServerProvider grpcserver.Provider, secretMigrationProvider secretsMigrations.SecretMigrationProvider, loginAttemptService *loginattemptimpl.Service,
+	bundleService *supportbundlesimpl.Service,
+	publicDashboardsMetric *publicdashboardsmetric.Service,
 	// Need to make sure these are initialized, is there a better place to put them?
 	_ dashboardsnapshots.Service, _ *alerting.AlertNotificationService,
 	_ serviceaccounts.Service, _ *guardian.Provider,
 	_ *plugindashboardsservice.DashboardUpdater, _ *sanitizer.Provider,
-	_ *grpcserver.HealthService, _ entity.EntityStoreServer, _ *grpcserver.ReflectionService,
+	_ *grpcserver.HealthService, _ entity.EntityStoreServer, _ *grpcserver.ReflectionService, _ *ldapapi.Service,
 ) *BackgroundServiceRegistry {
 	return NewBackgroundServiceRegistry(
 		httpServer,
@@ -74,7 +76,6 @@ func ProvideBackgroundServiceRegistry(
 		remoteCache,
 		secretsService,
 		StorageService,
-		thumbnailsService,
 		searchService,
 		entityEventsService,
 		grpcServerProvider,
@@ -83,6 +84,8 @@ func ProvideBackgroundServiceRegistry(
 		processManager,
 		secretMigrationProvider,
 		loginAttemptService,
+		bundleService,
+		publicDashboardsMetric,
 	)
 }
 

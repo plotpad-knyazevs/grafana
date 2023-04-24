@@ -1,5 +1,4 @@
-import { within } from '@testing-library/dom';
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import React from 'react';
 import { Provider } from 'react-redux';
@@ -12,6 +11,7 @@ import { GrafanaContext } from 'app/core/context/GrafanaContext';
 
 import { configureStore } from '../../../../store/configureStore';
 import { DashboardModel } from '../../state';
+import { createDashboardModelFixture } from '../../state/__fixtures__/dashboardFixtures';
 
 import { DashboardSettings } from './DashboardSettings';
 
@@ -37,7 +37,7 @@ function setup(dashboard: DashboardModel) {
 }
 
 function buildTestDashboard() {
-  return new DashboardModel({
+  return createDashboardModelFixture({
     links: [
       {
         asDropdown: false,
@@ -87,7 +87,7 @@ describe('LinksSettings', () => {
   };
 
   test('it renders a header and cta if no links', () => {
-    const linklessDashboard = new DashboardModel({ links: [] });
+    const linklessDashboard = createDashboardModelFixture({ links: [] });
     setup(linklessDashboard);
 
     expect(screen.getByRole('heading', { name: 'Links' })).toBeInTheDocument();

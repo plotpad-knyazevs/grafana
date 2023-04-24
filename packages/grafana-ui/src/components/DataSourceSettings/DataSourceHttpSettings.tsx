@@ -17,6 +17,7 @@ import { TagsInput } from '../TagsInput/TagsInput';
 import { BasicAuthSettings } from './BasicAuthSettings';
 import { CustomHeadersSettings } from './CustomHeadersSettings';
 import { HttpProxySettings } from './HttpProxySettings';
+import { SecureSocksProxySettings } from './SecureSocksProxySettings';
 import { TLSAuthSettings } from './TLSAuthSettings';
 import { HttpSettingsProps } from './types';
 
@@ -61,7 +62,7 @@ const HttpAccessHelp = () => (
 
 const LABEL_WIDTH = 26;
 
-export const DataSourceHttpSettings: React.FC<HttpSettingsProps> = (props) => {
+export const DataSourceHttpSettings = (props: HttpSettingsProps) => {
   const {
     defaultUrl,
     dataSourceConfig,
@@ -71,6 +72,7 @@ export const DataSourceHttpSettings: React.FC<HttpSettingsProps> = (props) => {
     showForwardOAuthIdentityOption,
     azureAuthSettings,
     renderSigV4Editor,
+    secureSocksDSProxyEnabled,
   } = props;
   let urlTooltip;
   const [isAccessHelpVisible, setIsAccessHelpVisible] = useState(false);
@@ -113,6 +115,7 @@ export const DataSourceHttpSettings: React.FC<HttpSettingsProps> = (props) => {
       options={ACCESS_OPTIONS}
       value={ACCESS_OPTIONS.filter((o) => o.value === dataSourceConfig.access)[0] || DEFAULT_ACCESS_OPTION}
       onChange={(selectedValue) => onSettingsChange({ access: selectedValue.value })}
+      disabled={dataSourceConfig.readOnly}
     />
   );
 
@@ -133,6 +136,7 @@ export const DataSourceHttpSettings: React.FC<HttpSettingsProps> = (props) => {
       value={dataSourceConfig.url}
       aria-label={selectors.components.DataSource.DataSourceHttpSettings.urlInput}
       onChange={(event) => onSettingsChange({ url: event.currentTarget.value })}
+      disabled={dataSourceConfig.readOnly}
     />
   );
 
@@ -183,6 +187,7 @@ export const DataSourceHttpSettings: React.FC<HttpSettingsProps> = (props) => {
                   onChange={(cookies) =>
                     onSettingsChange({ jsonData: { ...dataSourceConfig.jsonData, keepCookies: cookies } })
                   }
+                  disabled={dataSourceConfig.readOnly}
                 />
               </div>
               <div className="gf-form">
@@ -200,6 +205,7 @@ export const DataSourceHttpSettings: React.FC<HttpSettingsProps> = (props) => {
                       jsonData: { ...dataSourceConfig.jsonData, timeout: parseInt(event.currentTarget.value, 10) },
                     });
                   }}
+                  disabled={dataSourceConfig.readOnly}
                 />
               </div>
             </div>
@@ -211,7 +217,7 @@ export const DataSourceHttpSettings: React.FC<HttpSettingsProps> = (props) => {
         <h3 className="page-heading">Auth</h3>
         <div className="gf-form-group">
           <div className="gf-form-inline">
-            <InlineField label="Basic auth" labelWidth={LABEL_WIDTH}>
+            <InlineField label="Basic auth" labelWidth={LABEL_WIDTH} disabled={dataSourceConfig.readOnly}>
               <InlineSwitch
                 id="http-settings-basic-auth"
                 value={dataSourceConfig.basicAuth}
@@ -225,6 +231,7 @@ export const DataSourceHttpSettings: React.FC<HttpSettingsProps> = (props) => {
               label="With Credentials"
               tooltip="Whether credentials such as cookies or auth headers should be sent with cross-site requests."
               labelWidth={LABEL_WIDTH}
+              disabled={dataSourceConfig.readOnly}
             >
               <InlineSwitch
                 id="http-settings-with-credentials"
@@ -242,6 +249,7 @@ export const DataSourceHttpSettings: React.FC<HttpSettingsProps> = (props) => {
                 label="Azure Authentication"
                 tooltip="Use Azure authentication for Azure endpoint."
                 labelWidth={LABEL_WIDTH}
+                disabled={dataSourceConfig.readOnly}
               >
                 <InlineSwitch
                   id="http-settings-azure-auth"
@@ -258,7 +266,7 @@ export const DataSourceHttpSettings: React.FC<HttpSettingsProps> = (props) => {
 
           {sigV4AuthToggleEnabled && (
             <div className="gf-form-inline">
-              <InlineField label="SigV4 auth" labelWidth={LABEL_WIDTH}>
+              <InlineField label="SigV4 auth" labelWidth={LABEL_WIDTH} disabled={dataSourceConfig.readOnly}>
                 <InlineSwitch
                   id="http-settings-sigv4-auth"
                   value={dataSourceConfig.jsonData.sigV4Auth || false}
@@ -302,6 +310,7 @@ export const DataSourceHttpSettings: React.FC<HttpSettingsProps> = (props) => {
           <CustomHeadersSettings dataSourceConfig={dataSourceConfig} onChange={onChange} />
         )}
       </>
+      {secureSocksDSProxyEnabled && <SecureSocksProxySettings options={dataSourceConfig} onOptionsChange={onChange} />}
     </div>
   );
 };

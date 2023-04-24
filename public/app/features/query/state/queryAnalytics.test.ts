@@ -10,7 +10,7 @@ import {
 } from '@grafana/data';
 import { MetaAnalyticsEventName, reportMetaAnalytics } from '@grafana/runtime';
 
-import { DashboardModel } from '../../dashboard/state';
+import { createDashboardModelFixture } from '../../dashboard/state/__fixtures__/dashboardFixtures';
 
 import { emitDataRequestEvent } from './queryAnalytics';
 
@@ -24,7 +24,7 @@ const datasource = {
   uid: 'test',
 } as DataSourceApi;
 
-const dashboardModel = new DashboardModel(
+const dashboardModel = createDashboardModelFixture(
   { id: 1, title: 'Test Dashboard', uid: 'test' },
   { folderTitle: 'Test Folder' }
 );
@@ -89,7 +89,6 @@ function getTestData(requestApp: string, series: DataFrame[] = []): PanelData {
   return {
     request: {
       app: requestApp,
-      dashboardId: 1,
       panelId: 2,
       startTime: now.unix(),
       endTime: now.add(1, 's').unix(),
@@ -111,7 +110,6 @@ function getTestDataForExplore(requestApp: string, series: DataFrame[] = []): Pa
   return {
     request: {
       app: requestApp,
-      dashboardId: 0,
       startTime: now.unix(),
       endTime: now.add(1, 's').unix(),
     } as DataQueryRequest,
@@ -136,13 +134,11 @@ describe('emitDataRequestEvent - from a dashboard panel', () => {
       expect.objectContaining({
         eventName: MetaAnalyticsEventName.DataRequest,
         datasourceName: datasource.name,
-        datasourceId: datasource.id,
         datasourceUid: datasource.uid,
+        datasourceType: datasource.type,
+        source: 'dashboard',
         panelId: 2,
-        dashboardId: 1,
-        dashboardName: 'Test Dashboard',
-        dashboardUid: 'test',
-        folderName: 'Test Folder',
+        dashboardUid: 'test', // from dashboard srv
         dataSize: 0,
         duration: 1,
         totalQueries: 0,
@@ -160,13 +156,11 @@ describe('emitDataRequestEvent - from a dashboard panel', () => {
       expect.objectContaining({
         eventName: MetaAnalyticsEventName.DataRequest,
         datasourceName: datasource.name,
-        datasourceId: datasource.id,
         datasourceUid: datasource.uid,
+        datasourceType: datasource.type,
+        source: 'dashboard',
         panelId: 2,
-        dashboardId: 1,
-        dashboardName: 'Test Dashboard',
         dashboardUid: 'test',
-        folderName: 'Test Folder',
         dataSize: 2,
         duration: 1,
         totalQueries: 2,
@@ -184,13 +178,11 @@ describe('emitDataRequestEvent - from a dashboard panel', () => {
       expect.objectContaining({
         eventName: MetaAnalyticsEventName.DataRequest,
         datasourceName: datasource.name,
-        datasourceId: datasource.id,
         datasourceUid: datasource.uid,
+        datasourceType: datasource.type,
+        source: 'dashboard',
         panelId: 2,
-        dashboardId: 1,
-        dashboardName: 'Test Dashboard',
-        dashboardUid: 'test',
-        folderName: 'Test Folder',
+        dashboardUid: 'test', // from dashboard srv
         dataSize: 2,
         duration: 1,
         totalQueries: 1,
@@ -230,7 +222,6 @@ describe('emitDataRequestEvent - from Explore', () => {
         eventName: MetaAnalyticsEventName.DataRequest,
         source: 'explore',
         datasourceName: 'test',
-        datasourceId: 1,
         datasourceUid: 'test',
         dataSize: 0,
         duration: 1,

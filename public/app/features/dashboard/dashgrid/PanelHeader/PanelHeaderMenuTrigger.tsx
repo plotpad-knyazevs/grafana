@@ -1,4 +1,4 @@
-import React, { HTMLAttributes, MouseEvent, ReactElement, useCallback, useState } from 'react';
+import React, { HTMLAttributes, MouseEvent, ReactElement, useCallback, useRef, useState } from 'react';
 
 import { CartesianCoords2D } from '@grafana/data';
 
@@ -11,34 +11,31 @@ interface Props extends Omit<HTMLAttributes<HTMLDivElement>, 'children'> {
   children: (props: PanelHeaderMenuTriggerApi) => ReactElement;
 }
 
-export const PanelHeaderMenuTrigger = ({ children, ...divProps }: Props) => {
-  const [clickCoordinates, setClickCoordinates] = useState<CartesianCoords2D>({ x: 0, y: 0 });
+export function PanelHeaderMenuTrigger({ children, ...divProps }: Props) {
+  const clickCoordinates = useRef<CartesianCoords2D>({ x: 0, y: 0 });
   const [panelMenuOpen, setPanelMenuOpen] = useState<boolean>(false);
 
   const onMenuToggle = useCallback(
     (event: MouseEvent<HTMLDivElement>) => {
-      if (!isClick(clickCoordinates, eventToClickCoordinates(event))) {
+      if (!isClick(clickCoordinates.current, eventToClickCoordinates(event))) {
         return;
       }
 
       setPanelMenuOpen(!panelMenuOpen);
     },
-    [clickCoordinates, panelMenuOpen, setPanelMenuOpen]
+    [panelMenuOpen, setPanelMenuOpen]
   );
 
-  const onMouseDown = useCallback(
-    (event: MouseEvent<HTMLDivElement>) => {
-      setClickCoordinates(eventToClickCoordinates(event));
-    },
-    [setClickCoordinates]
-  );
+  const onMouseDown = useCallback((event: MouseEvent<HTMLDivElement>) => {
+    clickCoordinates.current = eventToClickCoordinates(event);
+  }, []);
 
   return (
     <header {...divProps} className="panel-title-container" onClick={onMenuToggle} onMouseDown={onMouseDown}>
       {children({ panelMenuOpen, closeMenu: () => setPanelMenuOpen(false) })}
     </header>
   );
-};
+}
 
 function isClick(current: CartesianCoords2D, clicked: CartesianCoords2D, deadZone = 3.5): boolean {
   // A "deadzone" radius is added so that if the cursor is moved within this radius
